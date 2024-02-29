@@ -1,6 +1,7 @@
-from pynput.keyboard import Listener, Key
 import requests
-import os
+import evdev
+from evdev import InputDevice, categorize, ecodes
+import subprocess
 
 # API settings
 API_BASE_URL = "https://api.speisekammer.app"
@@ -17,10 +18,17 @@ mode = INSERT_MODE  # Default mode
 # Temporary store for barcode digits
 barcode_digits = []
 
+def find_scanner_device():
+    devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+    for device in devices:
+        if DEVICE_NAME in device.name:
+            return device
+    return None
+
 
 def beep():
     # Play a beep sound
-    os.system('afplay /System/Library/Sounds/Ping.aiff')
+    subprocess.run(['aplay', '/path/to/beep/sound.wav'])
 
 
 def update_stock(gtin, mode):
@@ -70,42 +78,33 @@ def update_stock(gtin, mode):
         return
 
 
-def on_press(key):
-    global barcode_digits
-    try:
-        if hasattr(key, 'char') and key.char is not None:
-            # Handle numeric keys and special mode-switching codes
-            if key.char.isdigit():
-                barcode_digits.append(key.char)
-            elif key.char == 'i':  # Switch to INSERT_MODE
-                global mode
+
+def main():
+    device = find_scanner_device()
+    if device is None:
+        print(f"Scanner device {DEVICE_NAME} not found.")
+        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        print(f"Other devices are: {devices}")
+        return
+    device = InputDevice(device.path)
+    print(f"Using input device: {device.name}")
+
+    global mode
+    for event in device.read_loop():
+        if event.type == ecodes.EV_KEY and event.value == 1:  # KeyEvent and Down
+            data = categorize(event)
+            if data.scancode == 2:  # '1' key, switch to INSERT_MODE
                 mode = INSERT_MODE
                 print("Switched to INSERT mode")
                 beep()
-                barcode_digits = []  # Clear digits
-            elif key.char == 'r':  # Switch to REMOVE_MODE
+            elif data.scancode == 3:  # '2' key, switch to REMOVE_MODE
                 mode = REMOVE_MODE
                 print("Switched to REMOVE mode")
                 beep()
-                barcode_digits = []  # Clear digits
-    except AttributeError:
-        pass
-
-
-def on_release(key):
-    if key == Key.enter:
-        # Process the barcode when Enter is pressed
-        barcode = ''.join(barcode_digits)
-        if barcode:
-            print(f"Scanned barcode in {mode} mode: {barcode}")
-            update_stock(barcode, mode)
-        # Reset the barcode_digits for the next scan
-        barcode_digits.clear()
-
-
-def main():
-    with Listener(on_press=on_press, on_release=on_release) as listener:
-        listener.join()
+            else:
+                barcode = str(data.scancode)  # Simplified; in practice, map scancode to actual barcode number
+                print(f"Scanned barcode in {mode} mode: {barcode}")
+                update_stock(barcode, mode)
 
 
 if __name__ == "__main__":
