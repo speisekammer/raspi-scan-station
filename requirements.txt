@@ -1,4 +1,4 @@
-requests=*
-pynput=*
-ujson=*
-evdev=*
+requests==*
+pynput==*
+ujson==*
+evdev==*

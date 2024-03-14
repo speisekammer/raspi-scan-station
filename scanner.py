@@ -1,12 +1,27 @@
 import requests
 import evdev
 from evdev import InputDevice, categorize, ecodes
-import subproces
+import subprocess
 import ujson
+
+try:
+    config = ujson.load(open('config.json'))
+    print("Successfully loaded config.json")
+except FileNotFoundError:
+    print('''
+config.json not found. Please generate a file named config.json with your credentials:
+
+{
+    "token": "your_access_token",
+    "communityId": "your_community_id",
+    "storageLocationId": "your_storage_location_id"
+}
+''')
+    exit(1)
 
 # API settings
 API_BASE_URL = "https://api.speisekammer.app"
-HEADERS = {"Authorization": f"Bearer {ACCESS_TOKEN}", 'accept': 'application/json'}
+HEADERS = {"Authorization": f"Bearer {config['token']}", 'accept': 'application/json'}
 DEVICE_NAME = "Datalogic Scanning, Inc. Point of Sale Handable Scanner"
 
 # Modes
@@ -76,7 +91,6 @@ def update_stock(gtin, mode):
     else:
         print("Invalid mode")
         return
-
 
 
 def main():
