@@ -1,7 +1,6 @@
 import requests
 import evdev
 from evdev import InputDevice, categorize, ecodes
-import subprocess
 import ujson
 
 try:
@@ -41,7 +40,6 @@ def find_scanner_device():
         if DEVICE_NAME in device.name:
             return device
     return None
-
 
 def beep():
     # Play a beep sound
