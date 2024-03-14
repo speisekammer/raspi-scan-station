@@ -1,14 +1,13 @@
 import requests
 import evdev
 from evdev import InputDevice, categorize, ecodes
-import subprocess
+import subproces
+import ujson
 
 # API settings
 API_BASE_URL = "https://api.speisekammer.app"
-COMMUNITY_ID = ""
-STORAGE_LOCATION_ID = ""
-ACCESS_TOKEN = ""
 HEADERS = {"Authorization": f"Bearer {ACCESS_TOKEN}", 'accept': 'application/json'}
+DEVICE_NAME = "Datalogic Scanning, Inc. Point of Sale Handable Scanner"
 
 # Modes
 INSERT_MODE = "insert"
@@ -21,6 +20,7 @@ barcode_digits = []
 def find_scanner_device():
     devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
     for device in devices:
+        print("device name", device.name)
         if DEVICE_NAME in device.name:
             return device
     return None
