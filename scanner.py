@@ -23,14 +23,16 @@ config.json not found. Please generate a file named config.json with your creden
 API_BASE_URL = "https://api.speisekammer.app"
 HEADERS = {"Authorization": f"Bearer {config['token']}", 'accept': 'application/json'}
 DEVICE_NAME = "Datalogic Scanning, Inc. Point of Sale Handable Scanner"
+COMMUNITY_ID = config['communityId']
+STORAGE_LOCATION_ID = config['storageLocationId']
 
 # Modes
 INSERT_MODE = "insert"
 REMOVE_MODE = "remove"
 mode = INSERT_MODE  # Default mode
 
-# Temporary store for barcode digits
-barcode_digits = []
+REMOVE_CODE = "02000060" # last digit 0 = remove
+INSERT_CODE = "02000091" # last digit 1 = insert
 
 def find_scanner_device():
     devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
@@ -43,7 +45,9 @@ def find_scanner_device():
 
 def beep():
     # Play a beep sound
-    subprocess.run(['aplay', '/path/to/beep/sound.wav'])
+    # Not yet implemented.
+    # subprocess.run(['aplay', '/path/to/beep/sound.wav'])
+    pass
 
 
 def update_stock(gtin, mode):
@@ -93,7 +97,22 @@ def update_stock(gtin, mode):
         return
 
 
+def generate_keycode_map():
+    return {
+            ecodes.KEY_1: '1',
+            ecodes.KEY_2: '2',
+            ecodes.KEY_3: '3',
+            ecodes.KEY_4: '4',
+            ecodes.KEY_5: '5',
+            ecodes.KEY_6: '6',
+            ecodes.KEY_7: '7',
+            ecodes.KEY_8: '8',
+            ecodes.KEY_9: '9',
+            ecodes.KEY_0: '0'
+        }
+
 def main():
+    keycode_map = generate_keycode_map()
     device = find_scanner_device()
     if device is None:
         print(f"Scanner device {DEVICE_NAME} not found.")
@@ -102,23 +121,36 @@ def main():
         return
     device = InputDevice(device.path)
     print(f"Using input device: {device.name}")
+    print(f"Waiting for next scan...")
 
     global mode
+    scanned_code = ''
     for event in device.read_loop():
+        # print("Got event")
+        # print(event)
         if event.type == ecodes.EV_KEY and event.value == 1:  # KeyEvent and Down
+            
             data = categorize(event)
-            if data.scancode == 2:  # '1' key, switch to INSERT_MODE
-                mode = INSERT_MODE
-                print("Switched to INSERT mode")
-                beep()
-            elif data.scancode == 3:  # '2' key, switch to REMOVE_MODE
-                mode = REMOVE_MODE
-                print("Switched to REMOVE mode")
-                beep()
+
+            if data.scancode in keycode_map:
+                scanned_code = scanned_code + keycode_map[data.scancode]
+            elif data.scancode == ecodes.KEY_ENTER:
+                
+
+                if scanned_code == INSERT_CODE:
+                    mode = INSERT_MODE
+                    print(f"Switched to INSERT mode")
+                elif scanned_code == REMOVE_CODE:
+                    print(f"Switched to REMOVE mode")
+                    mode = REMOVE_MODE
+                else:
+
+                    print(f"Scanned barcode in {mode} mode: {scanned_code}")
+                    update_stock(scanned_code, mode)
+    
+                scanned_code = ''
             else:
-                barcode = str(data.scancode)  # Simplified; in practice, map scancode to actual barcode number
-                print(f"Scanned barcode in {mode} mode: {barcode}")
-                update_stock(barcode, mode)
+                print(f"Ignoring unrecognized character: {data.scancode}")
 
 
 if __name__ == "__main__":
