@@ -4,10 +4,10 @@ from evdev import InputDevice, categorize, ecodes
 import ujson
 
 try:
-    config = ujson.load(open('config.json'))
+    config = ujson.load(open("config.json"))
     print("Successfully loaded config.json")
 except FileNotFoundError:
-    print('''
+    print("""
 config.json not found. Please generate a file named config.json with your credentials:
 
 {
@@ -15,23 +15,24 @@ config.json not found. Please generate a file named config.json with your creden
     "communityId": "your_community_id",
     "storageLocationId": "your_storage_location_id"
 }
-''')
+""")
     exit(1)
 
 # API settings
 API_BASE_URL = "https://api.speisekammer.app"
-HEADERS = {"Authorization": f"Bearer {config['token']}", 'accept': 'application/json'}
+HEADERS = {"Authorization": f"Bearer {config['token']}", "accept": "application/json"}
 DEVICE_NAME = "Datalogic Scanning, Inc. Point of Sale Handable Scanner"
-COMMUNITY_ID = config['communityId']
-STORAGE_LOCATION_ID = config['storageLocationId']
+COMMUNITY_ID = config["communityId"]
+STORAGE_LOCATION_ID = config["storageLocationId"]
 
 # Modes
 INSERT_MODE = "insert"
 REMOVE_MODE = "remove"
 mode = INSERT_MODE  # Default mode
 
-REMOVE_CODE = "02000060" # last digit 0 = remove
-INSERT_CODE = "02000091" # last digit 1 = insert
+REMOVE_CODE = "02000060"  # last digit 0 = remove
+INSERT_CODE = "02000091"  # last digit 1 = insert
+
 
 def find_scanner_device():
     devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
@@ -40,6 +41,7 @@ def find_scanner_device():
         if DEVICE_NAME in device.name:
             return device
     return None
+
 
 def beep():
     # Play a beep sound
@@ -59,7 +61,10 @@ def update_stock(gtin, mode):
         if get_response.status_code == 200:
             response_data = get_response.json()
             print("response", response_data)
-            data = {"gtin": gtin, "attributes": [{"count": response_data['attributes'][0]['count'] + 1}]}
+            data = {
+                "gtin": gtin,
+                "attributes": [{"count": response_data["attributes"][0]["count"] + 1}],
+            }
         else:
             data = {"gtin": gtin, "attributes": [{"count": 1}]}
         response = requests.put(url, json=data, headers=HEADERS)
@@ -69,15 +74,20 @@ def update_stock(gtin, mode):
             beep()  # Acknowledge successful scan
             print("successfully added", response.json())
         else:
-            print("API request failed with status code:", response.status_code, response.text)
-
+            print(
+                "API request failed with status code:",
+                response.status_code,
+                response.text,
+            )
 
     elif mode == REMOVE_MODE:
         print("REMOVE")
         if get_response.status_code == 200:
             response_data = get_response.json()
             request_body = response_data
-            request_body['attributes'][0]['count'] = response_data['attributes'][0]['count'] - 1
+            request_body["attributes"][0]["count"] = (
+                response_data["attributes"][0]["count"] - 1
+            )
 
             print("try put send", request_body)
 
@@ -87,7 +97,11 @@ def update_stock(gtin, mode):
                 beep()  # Acknowledge successful scan
                 print("successfully removed item, remaining item is:", response.json())
             else:
-                print("API request failed with status code:", response.status_code, response.text)
+                print(
+                    "API request failed with status code:",
+                    response.status_code,
+                    response.text,
+                )
         else:
             print("item not found in stock!")
     else:
@@ -97,17 +111,18 @@ def update_stock(gtin, mode):
 
 def generate_keycode_map():
     return {
-            ecodes.KEY_1: '1',
-            ecodes.KEY_2: '2',
-            ecodes.KEY_3: '3',
-            ecodes.KEY_4: '4',
-            ecodes.KEY_5: '5',
-            ecodes.KEY_6: '6',
-            ecodes.KEY_7: '7',
-            ecodes.KEY_8: '8',
-            ecodes.KEY_9: '9',
-            ecodes.KEY_0: '0'
-        }
+        ecodes.KEY_1: "1",
+        ecodes.KEY_2: "2",
+        ecodes.KEY_3: "3",
+        ecodes.KEY_4: "4",
+        ecodes.KEY_5: "5",
+        ecodes.KEY_6: "6",
+        ecodes.KEY_7: "7",
+        ecodes.KEY_8: "8",
+        ecodes.KEY_9: "9",
+        ecodes.KEY_0: "0",
+    }
+
 
 def main():
     keycode_map = generate_keycode_map()
@@ -119,34 +134,30 @@ def main():
         return
     device = InputDevice(device.path)
     print(f"Using input device: {device.name}")
-    print(f"Waiting for next scan...")
+    print("Waiting for next scan...")
 
     global mode
-    scanned_code = ''
+    scanned_code = ""
     for event in device.read_loop():
         # print("Got event")
         # print(event)
         if event.type == ecodes.EV_KEY and event.value == 1:  # KeyEvent and Down
-            
             data = categorize(event)
 
             if data.scancode in keycode_map:
                 scanned_code = scanned_code + keycode_map[data.scancode]
             elif data.scancode == ecodes.KEY_ENTER:
-                
-
                 if scanned_code == INSERT_CODE:
                     mode = INSERT_MODE
-                    print(f"Switched to INSERT mode")
+                    print("Switched to INSERT mode")
                 elif scanned_code == REMOVE_CODE:
-                    print(f"Switched to REMOVE mode")
+                    print("Switched to REMOVE mode")
                     mode = REMOVE_MODE
                 else:
-
                     print(f"Scanned barcode in {mode} mode: {scanned_code}")
                     update_stock(scanned_code, mode)
-    
-                scanned_code = ''
+
+                scanned_code = ""
             else:
                 print(f"Ignoring unrecognized character: {data.scancode}")
 
