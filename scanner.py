@@ -21,9 +21,15 @@ config.json not found. Please generate a file named config.json with your creden
 # API settings
 API_BASE_URL = "https://api.speisekammer.app"
 HEADERS = {"Authorization": f"Bearer {config['token']}", "accept": "application/json"}
-DEVICE_NAME = "Datalogic Scanning, Inc. Point of Sale Handable Scanner"
 COMMUNITY_ID = config["communityId"]
 STORAGE_LOCATION_ID = config["storageLocationId"]
+target_device_names = [
+    "Scanner",
+    "Scanning",
+    "Barcode",
+    "BARCODE",
+    # Add parts of the device name here, if your barcode scanner is not recognized
+]
 
 # Modes
 INSERT_MODE = "insert"
@@ -38,25 +44,21 @@ def find_scanner_device():
     devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
     for device in devices:
         print("device name", device.name)
-        if DEVICE_NAME in device.name:
+        if any(
+            target_device_name in device.name
+            for target_device_name in target_device_names
+        ):
             return device
     return None
 
 
-def beep():
-    # Play a beep sound
-    # Not yet implemented.
-    # subprocess.run(['aplay', '/path/to/beep/sound.wav'])
-    pass
-
-
-def update_stock(gtin, mode):
+def update_stock(gtin, update_mode):
     url = f"{API_BASE_URL}/stock/{COMMUNITY_ID}/{STORAGE_LOCATION_ID}"
 
     print("try to fetch stock info for gtin", gtin)
     get_response = requests.get(f"{url}/{gtin}", headers=HEADERS)
 
-    if mode == INSERT_MODE:
+    if update_mode == INSERT_MODE:
         print("INSERT")
         if get_response.status_code == 200:
             response_data = get_response.json()
@@ -71,7 +73,7 @@ def update_stock(gtin, mode):
         print("try put send", data)
 
         if response.status_code == 200:
-            beep()  # Acknowledge successful scan
+            # TODO Acknowledge successful add using a beep
             print("successfully added", response.json())
         else:
             print(
@@ -80,7 +82,7 @@ def update_stock(gtin, mode):
                 response.text,
             )
 
-    elif mode == REMOVE_MODE:
+    elif update_mode == REMOVE_MODE:
         print("REMOVE")
         if get_response.status_code == 200:
             response_data = get_response.json()
@@ -94,7 +96,7 @@ def update_stock(gtin, mode):
             response = requests.put(url, json=request_body, headers=HEADERS)
 
             if response.status_code == 200:
-                beep()  # Acknowledge successful scan
+                # TODO Acknowledge successful delete using a beep
                 print("successfully removed item, remaining item is:", response.json())
             else:
                 print(
@@ -128,7 +130,11 @@ def main():
     keycode_map = generate_keycode_map()
     device = find_scanner_device()
     if device is None:
-        print(f"Scanner device {DEVICE_NAME} not found.")
+        print(
+            """No USB scanner device found. Please connect a scanner and try again.
+            If it does not work, type 'lsusb' to find the device name.
+            Then add the name to the target_device_names list in the script."""
+        )
         devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
         print(f"Other devices are: {devices}")
         return
@@ -139,8 +145,6 @@ def main():
     global mode
     scanned_code = ""
     for event in device.read_loop():
-        # print("Got event")
-        # print(event)
         if event.type == ecodes.EV_KEY and event.value == 1:  # KeyEvent and Down
             data = categorize(event)
 
