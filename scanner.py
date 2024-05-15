@@ -52,60 +52,96 @@ def find_scanner_device():
     return None
 
 
+def delete_stock(gtin):
+    url = f"{API_BASE_URL}/stock/{COMMUNITY_ID}/{STORAGE_LOCATION_ID}/{gtin}"
+    response = requests.delete(url, headers=HEADERS)
+    if response.status_code == 200:
+        print("Successfully deleted item from stock!")
+    else:
+        print(
+            "API request failed with status code:",
+            response.status_code,
+            response.text,
+        )
+
+
+def get_response_data(response):
+    if response.status_code == 200:
+        response_data = response.json()
+        print(
+            f"Found item for barcode {response_data.gtin}: {response_data.name} (current count: {response_data.attributes})"
+        )
+        return response_data
+    else:
+        print(
+            "API request failed with status code:",
+            response.status_code,
+            response.text,
+        )
+        return None
+
+
 def update_stock(gtin, update_mode):
     url = f"{API_BASE_URL}/stock/{COMMUNITY_ID}/{STORAGE_LOCATION_ID}"
 
-    print("try to fetch stock info for gtin", gtin)
     get_response = requests.get(f"{url}/{gtin}", headers=HEADERS)
+    response_data = get_response_data(get_response)
 
     if update_mode == INSERT_MODE:
-        print("INSERT")
-        if get_response.status_code == 200:
-            response_data = get_response.json()
-            print("response", response_data)
+        if response_data:
             data = {
                 "gtin": gtin,
                 "attributes": [{"count": response_data["attributes"][0]["count"] + 1}],
             }
         else:
             data = {"gtin": gtin, "attributes": [{"count": 1}]}
-        response = requests.put(url, json=data, headers=HEADERS)
-        print("try put send", data)
 
-        if response.status_code == 200:
+        put_response = requests.put(url, json=data, headers=HEADERS)
+
+        if put_response.status_code == 200:
             # TODO Acknowledge successful add using a beep
-            print("successfully added", response.json())
+            print(
+                "Successfully added item! Resulting stock entry is: ",
+                put_response.json(),
+            )
         else:
             print(
                 "API request failed with status code:",
-                response.status_code,
-                response.text,
+                put_response.status_code,
+                put_response.text,
             )
 
     elif update_mode == REMOVE_MODE:
-        print("REMOVE")
-        if get_response.status_code == 200:
-            response_data = get_response.json()
-            request_body = response_data
-            request_body["attributes"][0]["count"] = (
-                response_data["attributes"][0]["count"] - 1
+        if not response_data:
+            print("Item not found in stock!")
+            return
+
+        request_body = response_data
+        current_count = response_data["attributes"][0]["count"]
+
+        if current_count == 0:
+            delete_stock(gtin)
+            return
+
+        # if count is greater than 1, just reduce the count
+        new_count = current_count - 1
+
+        request_body["attributes"][0]["count"] = new_count
+
+        put_response = requests.put(url, json=request_body, headers=HEADERS)
+
+        if put_response.status_code == 200:
+            # TODO Acknowledge successful delete using a beep
+            print(
+                "Successfully removed item! Remaining stock entry is:",
+                put_response.json(),
             )
-
-            print("try put send", request_body)
-
-            response = requests.put(url, json=request_body, headers=HEADERS)
-
-            if response.status_code == 200:
-                # TODO Acknowledge successful delete using a beep
-                print("successfully removed item, remaining item is:", response.json())
-            else:
-                print(
-                    "API request failed with status code:",
-                    response.status_code,
-                    response.text,
-                )
         else:
-            print("item not found in stock!")
+            print(
+                "API request failed with status code:",
+                put_response.status_code,
+                put_response.text,
+            )
     else:
         print("Invalid mode")
         return
@@ -153,12 +189,12 @@ def main():
             elif data.scancode == ecodes.KEY_ENTER:
                 if scanned_code == INSERT_CODE:
                     mode = INSERT_MODE
-                    print("Switched to INSERT mode")
+                    print("Switched barcode scanner to INSERT mode")
                 elif scanned_code == REMOVE_CODE:
-                    print("Switched to REMOVE mode")
+                    print("Switched barcode scanner to REMOVE mode")
                     mode = REMOVE_MODE
                 else:
-                    print(f"Scanned barcode in {mode} mode: {scanned_code}")
+                    # print(f"Scanned barcode in {mode} mode: {scanned_code}")
                     update_stock(scanned_code, mode)
 
                 scanned_code = ""
