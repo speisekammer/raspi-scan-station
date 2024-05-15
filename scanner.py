@@ -68,8 +68,9 @@ def delete_stock(gtin):
 def get_response_data(response):
     if response.status_code == 200:
         response_data = response.json()
+        print("response data", response_data)
         print(
-            f"Found item for barcode {response_data.gtin}: {response_data.name} (current count: {response_data.attributes})"
+            f"Found item for barcode {response_data['gtin']}: {response_data['name']} (current count: {response_data['attributes']})"
         )
         return response_data
     else:
